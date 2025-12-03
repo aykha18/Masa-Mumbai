@@ -14,7 +14,8 @@ const ProductShowcase = () => {
 
   const fetchFeaturedProducts = async () => {
     try {
-      const res = await axios.get(`${API_BASE}/api/products?limit=6`);
+      // Fetch fresh fish products (categoryId: 1) with limit 6
+      const res = await axios.get(`${API_BASE}/api/products?category=1&limit=6`);
       setProducts(res.data.products || res.data.slice(0, 6));
     } catch (err) {
       console.error('Failed to fetch products:', err);
