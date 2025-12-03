@@ -1,0 +1,12 @@
+{
+  "type": "home",
+  "name": "Home",
+  "fullName": "Ayub Khan",
+  "phone": "9876543210",
+  "street": "123 Main Street",
+  "city": "Mumbai",
+  "state": "Maharashtra",
+  "pincode": "400001",
+  "landmark": "Near Central Park",
+  "isDefault": true
+}
