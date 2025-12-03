@@ -21,6 +21,18 @@ const AdminPanel = ({ token }) => {
   const [imagePreviews, setImagePreviews] = useState([]);
   const [editingStock, setEditingStock] = useState(null);
   const [stockValue, setStockValue] = useState('');
+  const [editingProduct, setEditingProduct] = useState(null);
+  const [editProductData, setEditProductData] = useState({
+    name: '',
+    description: '',
+    price: '',
+    categoryId: '',
+    stock: '',
+    unit: 'piece',
+    unitLabel: 'each'
+  });
+  const [editSelectedImages, setEditSelectedImages] = useState([]);
+  const [editImagePreviews, setEditImagePreviews] = useState([]);
   const [newCategory, setNewCategory] = useState({ name: '', description: '' });
   const [newDeliverySlot, setNewDeliverySlot] = useState({
     name: '',
@@ -202,6 +214,78 @@ const AdminPanel = ({ token }) => {
     }
   };
 
+  const startEditingProduct = (product) => {
+    setEditingProduct(product.id);
+    setEditProductData({
+      name: product.name,
+      description: product.description,
+      price: product.price,
+      categoryId: product.categoryId,
+      stock: product.stock,
+      unit: product.unit,
+      unitLabel: product.unitLabel
+    });
+    setEditSelectedImages([]);
+    setEditImagePreviews([]);
+  };
+
+  const cancelEditingProduct = () => {
+    setEditingProduct(null);
+    setEditProductData({
+      name: '',
+      description: '',
+      price: '',
+      categoryId: '',
+      stock: '',
+      unit: 'piece',
+      unitLabel: 'each'
+    });
+    setEditSelectedImages([]);
+    setEditImagePreviews([]);
+  };
+
+  const handleEditImageChange = (e) => {
+    const files = Array.from(e.target.files);
+    setEditSelectedImages(files);
+
+    // Create preview URLs
+    const previews = files.map(file => URL.createObjectURL(file));
+    setEditImagePreviews(previews);
+  };
+
+  const updateProduct = async (e) => {
+    e.preventDefault();
+
+    const formData = new FormData();
+
+    // Append text fields
+    formData.append('name', editProductData.name || '');
+    formData.append('description', editProductData.description || '');
+    formData.append('price', editProductData.price || '');
+    formData.append('categoryId', editProductData.categoryId || '');
+    formData.append('stock', editProductData.stock || '');
+    formData.append('unit', editProductData.unit || 'piece');
+    formData.append('unitLabel', editProductData.unitLabel || 'each');
+
+    // Add new images if selected
+    editSelectedImages.forEach(image => {
+      formData.append('images', image);
+    });
+
+    try {
+      await axios.put(`${API_BASE}/api/products/${editingProduct}`, formData, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'multipart/form-data'
+        }
+      });
+      cancelEditingProduct();
+      fetchProducts();
+    } catch (err) {
+      console.error('Error updating product:', err);
+    }
+  };
+
   const tabs = [
     { id: 'products', label: 'Manage Products' },
     { id: 'categories', label: 'Manage Categories' },
@@ -354,83 +438,221 @@ const AdminPanel = ({ token }) => {
             <h3 className="text-xl font-semibold mb-4">Existing Products</h3>
             {products.map(p => (
               <div key={p.id} className="bg-white p-4 rounded-lg shadow mb-4">
-                <div className="flex justify-between items-start mb-3">
-                  <div className="flex-1">
-                    <div className="flex items-start space-x-4">
-                      {/* Product Images */}
-                      {p.primaryImage && (
-                        <img
-                          src={`${API_BASE}${p.primaryImage}`}
-                          alt={p.name}
-                          className="w-16 h-16 object-cover rounded-lg border"
+                {editingProduct === p.id ? (
+                  /* Edit Product Form */
+                  <form onSubmit={updateProduct}>
+                    <h4 className="font-semibold text-lg mb-4">Edit Product: {p.name}</h4>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                      <input
+                        type="text"
+                        placeholder="Name"
+                        value={editProductData.name}
+                        onChange={(e) => setEditProductData({ ...editProductData, name: e.target.value })}
+                        className="w-full p-3 border border-gray-300 rounded-lg"
+                        required
+                      />
+                      <input
+                        type="number"
+                        placeholder="Price"
+                        value={editProductData.price}
+                        onChange={(e) => setEditProductData({ ...editProductData, price: e.target.value })}
+                        className="w-full p-3 border border-gray-300 rounded-lg"
+                        required
+                      />
+                      <input
+                        type="number"
+                        placeholder="Stock Quantity"
+                        value={editProductData.stock}
+                        onChange={(e) => setEditProductData({ ...editProductData, stock: e.target.value })}
+                        className="w-full p-3 border border-gray-300 rounded-lg"
+                        min="0"
+                        required
+                      />
+                      <select
+                        value={editProductData.categoryId}
+                        onChange={(e) => setEditProductData({ ...editProductData, categoryId: e.target.value })}
+                        className="w-full p-3 border border-gray-300 rounded-lg"
+                        required
+                      >
+                        <option value="">Select Category</option>
+                        {categories.map(c => (
+                          <option key={c.id} value={c.id}>{c.name}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <textarea
+                      placeholder="Description"
+                      value={editProductData.description}
+                      onChange={(e) => setEditProductData({ ...editProductData, description: e.target.value })}
+                      className="w-full p-3 mb-4 border border-gray-300 rounded-lg"
+                      rows="3"
+                    />
+
+                    {/* Unit Selection */}
+                    <div className="grid grid-cols-2 gap-4 mb-4">
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Unit Type</label>
+                        <select
+                          value={editProductData.unit}
+                          onChange={(e) => {
+                            const unit = e.target.value;
+                            let unitLabel = 'each';
+                            if (unit === 'kg') unitLabel = 'per kg';
+                            else if (unit === 'dozen') unitLabel = 'per dozen';
+                            setEditProductData({ ...editProductData, unit, unitLabel });
+                          }}
+                          className="w-full p-3 border border-gray-300 rounded-lg"
+                          required
+                        >
+                          <option value="piece">Piece</option>
+                          <option value="kg">Kilogram (kg)</option>
+                          <option value="dozen">Dozen</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Unit Label</label>
+                        <input
+                          type="text"
+                          placeholder="Display label"
+                          value={editProductData.unitLabel}
+                          onChange={(e) => setEditProductData({ ...editProductData, unitLabel: e.target.value })}
+                          className="w-full p-3 border border-gray-300 rounded-lg"
+                          required
                         />
-                      )}
-                      <div className="flex-1">
-                        <h4 className="font-semibold text-lg">{p.name}</h4>
-                        <p className="text-gray-600 mb-2">{p.description}</p>
-                        <p className="text-green-600 font-semibold">₹{p.price} <span className="text-sm text-gray-500">{p.unitLabel}</span></p>
-                        <p className="text-sm text-gray-500">Category: {p.category ? p.category.name : 'N/A'}</p>
-                        {p.images && p.images.length > 1 && (
-                          <p className="text-sm text-gray-500">{p.images.length} images</p>
-                        )}
                       </div>
                     </div>
-                  </div>
-                  <div className="flex space-x-2">
-                    <button
-                      onClick={() => deleteProduct(p.id)}
-                      className="bg-red-500 text-white px-3 py-1 rounded-lg hover:bg-red-600 text-sm"
-                    >
-                      Delete
-                    </button>
-                  </div>
-                </div>
 
-                {/* Stock Management */}
-                <div className="border-t pt-3">
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm font-medium text-gray-700">Stock:</span>
-                    {editingStock === p.id ? (
-                      <div className="flex items-center space-x-2">
-                        <input
-                          type="number"
-                          value={stockValue}
-                          onChange={(e) => setStockValue(e.target.value)}
-                          className="w-20 px-2 py-1 border border-gray-300 rounded text-sm"
-                          min="0"
-                          autoFocus
-                        />
-                        <button
-                          onClick={() => updateStock(p.id)}
-                          className="bg-green-500 text-white px-2 py-1 rounded text-sm hover:bg-green-600"
-                        >
-                          Save
-                        </button>
-                        <button
-                          onClick={cancelEditingStock}
-                          className="bg-gray-500 text-white px-2 py-1 rounded text-sm hover:bg-gray-600"
-                        >
-                          Cancel
-                        </button>
-                      </div>
-                    ) : (
-                      <div className="flex items-center space-x-2">
-                        <span className={`text-sm font-semibold ${p.stock === 0 ? 'text-red-600' : 'text-green-600'}`}>
-                          {p.stock} {p.unit === 'kg' ? 'kg' : p.unit === 'dozen' ? 'dozen' : 'pieces'}
-                        </span>
-                        <button
-                          onClick={() => startEditingStock(p.id, p.stock)}
-                          className="bg-blue-500 text-white px-2 py-1 rounded text-sm hover:bg-blue-600"
-                        >
-                          Update Stock
-                        </button>
+                    {/* Image Upload */}
+                    <div className="mb-4">
+                      <label className="block text-sm font-medium text-gray-700 mb-2">Update Images (optional)</label>
+                      <input
+                        type="file"
+                        multiple
+                        accept="image/*"
+                        onChange={handleEditImageChange}
+                        className="w-full p-3 border border-gray-300 rounded-lg"
+                      />
+                      <p className="text-sm text-gray-500 mt-1">Select new images to replace existing ones (JPEG, PNG, GIF)</p>
+                    </div>
+
+                    {/* Image Previews */}
+                    {editImagePreviews.length > 0 && (
+                      <div className="mb-4">
+                        <label className="block text-sm font-medium text-gray-700 mb-2">New Image Previews</label>
+                        <div className="grid grid-cols-3 gap-2">
+                          {editImagePreviews.map((preview, index) => (
+                            <img
+                              key={index}
+                              src={preview}
+                              alt={`Preview ${index + 1}`}
+                              className="w-full h-20 object-cover rounded-lg border"
+                            />
+                          ))}
+                        </div>
                       </div>
                     )}
-                  </div>
-                  {p.stock === 0 && (
-                    <p className="text-red-500 text-xs mt-1">⚠️ This product is currently out of stock</p>
-                  )}
-                </div>
+
+                    <div className="flex space-x-2">
+                      <button type="submit" className="bg-green-500 text-white px-4 py-2 rounded-lg hover:bg-green-600">
+                        Update Product
+                      </button>
+                      <button
+                        type="button"
+                        onClick={cancelEditingProduct}
+                        className="bg-gray-500 text-white px-4 py-2 rounded-lg hover:bg-gray-600"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  </form>
+                ) : (
+                  /* Product Display */
+                  <>
+                    <div className="flex justify-between items-start mb-3">
+                      <div className="flex-1">
+                        <div className="flex items-start space-x-4">
+                          {/* Product Images */}
+                          {p.primaryImage && (
+                            <img
+                              src={`${API_BASE}${p.primaryImage}`}
+                              alt={p.name}
+                              className="w-16 h-16 object-cover rounded-lg border"
+                            />
+                          )}
+                          <div className="flex-1">
+                            <h4 className="font-semibold text-lg">{p.name}</h4>
+                            <p className="text-gray-600 mb-2">{p.description}</p>
+                            <p className="text-green-600 font-semibold">₹{p.price} <span className="text-sm text-gray-500">{p.unitLabel}</span></p>
+                            <p className="text-sm text-gray-500">Category: {p.category ? p.category.name : 'N/A'}</p>
+                            {p.images && p.images.length > 1 && (
+                              <p className="text-sm text-gray-500">{p.images.length} images</p>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                      <div className="flex space-x-2">
+                        <button
+                          onClick={() => startEditingProduct(p)}
+                          className="bg-blue-500 text-white px-3 py-1 rounded-lg hover:bg-blue-600 text-sm"
+                        >
+                          Edit
+                        </button>
+                        <button
+                          onClick={() => deleteProduct(p.id)}
+                          className="bg-red-500 text-white px-3 py-1 rounded-lg hover:bg-red-600 text-sm"
+                        >
+                          Delete
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Stock Management */}
+                    <div className="border-t pt-3">
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm font-medium text-gray-700">Stock:</span>
+                        {editingStock === p.id ? (
+                          <div className="flex items-center space-x-2">
+                            <input
+                              type="number"
+                              value={stockValue}
+                              onChange={(e) => setStockValue(e.target.value)}
+                              className="w-20 px-2 py-1 border border-gray-300 rounded text-sm"
+                              min="0"
+                              autoFocus
+                            />
+                            <button
+                              onClick={() => updateStock(p.id)}
+                              className="bg-green-500 text-white px-2 py-1 rounded text-sm hover:bg-green-600"
+                            >
+                              Save
+                            </button>
+                            <button
+                              onClick={cancelEditingStock}
+                              className="bg-gray-500 text-white px-2 py-1 rounded text-sm hover:bg-gray-600"
+                            >
+                              Cancel
+                            </button>
+                          </div>
+                        ) : (
+                          <div className="flex items-center space-x-2">
+                            <span className={`text-sm font-semibold ${p.stock === 0 ? 'text-red-600' : 'text-green-600'}`}>
+                              {p.stock} {p.unit === 'kg' ? 'kg' : p.unit === 'dozen' ? 'dozen' : 'pieces'}
+                            </span>
+                            <button
+                              onClick={() => startEditingStock(p.id, p.stock)}
+                              className="bg-blue-500 text-white px-2 py-1 rounded text-sm hover:bg-blue-600"
+                            >
+                              Update Stock
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                      {p.stock === 0 && (
+                        <p className="text-red-500 text-xs mt-1">⚠️ This product is currently out of stock</p>
+                      )}
+                    </div>
+                  </>
+                )}
               </div>
             ))}
           </div>

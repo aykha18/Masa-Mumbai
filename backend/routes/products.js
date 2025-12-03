@@ -148,15 +148,54 @@ router.post('/', auth, upload.any(), async (req, res) => {
 });
 
 // Update product
-router.put('/:id', auth, async (req, res) => {
+router.put('/:id', auth, upload.any(), async (req, res) => {
   try {
     const product = await Product.findByPk(req.params.id);
-    if (product) {
-      await product.update(req.body);
-      res.json(product);
-    } else {
-      res.status(404).json({ message: 'Product not found' });
+    if (!product) {
+      return res.status(404).json({ message: 'Product not found' });
     }
+
+    const updateData = {};
+
+    // Handle image uploads if provided
+    if (req.files && req.files.length > 0) {
+      const newImages = [];
+      req.files.forEach(file => {
+        if (file.fieldname === 'images') {
+          newImages.push(`/uploads/${file.filename}`);
+        }
+      });
+
+      // Replace existing images with new ones
+      if (newImages.length > 0) {
+        updateData.images = newImages;
+        updateData.primaryImage = newImages[0];
+      }
+    }
+
+    // Parse text fields from req.body
+    Object.keys(req.body).forEach(key => {
+      const value = req.body[key];
+      if (value !== undefined && value !== '') {
+        switch (key) {
+          case 'price':
+            updateData[key] = parseFloat(value);
+            break;
+          case 'categoryId':
+          case 'stock':
+            updateData[key] = parseInt(value);
+            break;
+          default:
+            updateData[key] = value;
+        }
+      }
+    });
+
+    await product.update(updateData);
+    const updatedProduct = await Product.findByPk(req.params.id, {
+      include: { model: Category, as: 'category' }
+    });
+    res.json(updatedProduct);
   } catch (error) {
     console.error('Error updating product:', error);
     res.status(500).json({ message: error.message });
